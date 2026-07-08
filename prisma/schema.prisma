@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brandFormDraft BrandFormDraft?
+  workflowRuns   WorkflowRun[]
+  prompts        Prompt[]
+  logos          Logo[]
+
+  @@index([userId, createdAt])
+}
+
+model BrandFormDraft {
+  id                String   @id @default(cuid())
+  projectId         String   @unique
+  currentStep       String   @default("basic_information")
+  status            String   @default("draft")
+  formData          Json
+  aiSummary         Json?
+  reviewConfirmedAt DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+}
+
+model WorkflowRun {
+  id                String   @id @default(cuid())
+  projectId         String
+  initiatedByUserId String
+  status            String   @default("pending")
+  currentStep       String   @default("brand_analyst")
+  source            String   @default("brand_form")
+  inputJson         Json?
+  outputJson        Json?
+  errorJson         Json?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stepRuns WorkflowStepRun[]
+  promptVersions PromptVersion[]
+  logos Logo[]
+
+  @@index([projectId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model WorkflowStepRun {
+  id            String   @id @default(cuid())
+  workflowRunId String
+  roleKey       String
+  roleLabel     String
+  stepOrder     Int
+  status        String   @default("pending")
+  inputJson     Json
+  outputJson    Json?
+  errorJson     Json?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@index([workflowRunId, stepOrder])
+  @@index([status, updatedAt])
+}
+
+model Prompt {
+  id                    String   @id @default(cuid())
+  projectId             String
+  styleKey              String
+  title                 String
+  status                String   @default("draft")
+  currentVersion        Int      @default(0)
+  latestScore           Float?
+  latestPromptVersionId String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions PromptVersion[]
+  logos    Logo[]
+
+  @@unique([projectId, styleKey])
+  @@index([projectId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model PromptVersion {
+  id            String   @id @default(cuid())
+  promptId      String
+  workflowRunId String
+  version       Int
+  status        String   @default("draft")
+  promptText    String
+  generatedJson Json?
+  reviewJson    Json?
+  scoreJson     Json?
+  score         Float?
+  approvedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  prompt      Prompt      @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  logos       Logo[]
+
+  @@unique([promptId, version])
+  @@index([workflowRunId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model Logo {
+  id                  String   @id @default(cuid())
+  projectId           String
+  workflowRunId       String
+  promptId            String
+  promptVersionId     String
+  styleKey            String
+  title               String
+  provider            String
+  model               String
+  status              String   @default("queued")
+  generationInputJson Json
+  generationOutputJson Json?
+  errorJson           Json?
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workflowRun   WorkflowRun   @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  prompt        Prompt        @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  promptVersion PromptVersion @relation(fields: [promptVersionId], references: [id], onDelete: Cascade)
+  assets        LogoAsset[]
+
+  @@index([projectId, createdAt])
+  @@index([workflowRunId, createdAt])
+  @@index([promptId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model LogoAsset {
+  id        String   @id @default(cuid())
+  logoId    String
+  kind      String
+  mimeType  String
+  dataUrl   String?
+  sourceUrl String?
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logo Logo @relation(fields: [logoId], references: [id], onDelete: Cascade)
+
+  @@index([logoId, createdAt])
+}
